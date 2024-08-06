@@ -1,3 +1,5 @@
+import re
+
 from .valid import proxy_valid
 class ProxyManager():
     used_proxy_index = 0
@@ -18,6 +20,11 @@ class ProxyManager():
         elif isinstance(proxy_item, dict):
             ip = proxy_item["ip"]
             port = proxy_item["port"]
+        elif isinstance(proxy_item, str):
+            t = re.sub(r'^\s*(https?://)?\s*|\s*$', '',proxy_item)
+            _arr = t.split(":")
+            ip = _arr[0]
+            port = int(_arr[1])
         else:
             raise ValueError("The proxy element must be a list or dict!")
         ok, proxy = proxy_valid(ip, port)

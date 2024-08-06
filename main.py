@@ -1,6 +1,7 @@
 # script.py
 import argparse
 import json
+import re
 
 import requests
 from bs4 import BeautifulSoup
