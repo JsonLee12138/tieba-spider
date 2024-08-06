@@ -5,6 +5,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 import os
+from proxy_manager import proxy_valid, ProxyManager
 
 proxyList = [
     ['209.121.164.50', 31147],
@@ -106,10 +107,8 @@ proxyList = [
     ['66.31.131.217', 8080],
     ['103.228.36.164', 10000]
 ]
-proxyCount = len(proxyList)
 usedProxy = []
-usedProxyIndex = 0
-
+proxy = ProxyManager(proxyList)
 def main():
     # 创建ArgumentParser对象
     parser = argparse.ArgumentParser(description="Script to demonstrate argument parsing")
@@ -131,7 +130,6 @@ def main():
 def searchFromTieba(q):
     base_url = 'https://tieba.baidu.com'
     search_url = f'{base_url}/f?ie=utf-8&kw={q}&fr=search'
-    # res = requests.get(url=search_url)
     res = requestWithProxy(search_url)
     soup = BeautifulSoup(res.text, 'html.parser')
     lis = soup.findAll('li', {'class': 'j_thread_list'})
@@ -144,9 +142,8 @@ def searchFromTieba(q):
         }
         # 在外层<div>标签中查找内层<div>标签
         titleDiv = li.find('a', {'class': 'j_th_tit'})
-        # detailsDiv = li.find('div', {'class': 'threadlist_detail'})
         if titleDiv is not None:
-            item['title'] = titleDiv.text
+            item['title'] = titleDiv.text.strip(' \n\t')
             item['link'] = titleDiv.attrs['href']
             try:
                 detailsRes = requestWithProxy(f'{base_url}{item['link']}')
@@ -167,11 +164,9 @@ def searchFromTieba(q):
                                 'url': imageDiv.attrs['src'],
                                 'width': imageDiv.attrs['width'],
                                 'height': imageDiv.attrs['height'],
-                                # 'size': imageDiv.attrs['size']
                             })
                     replyMainDiv = pContentDiv.find('div', {'class': 'core_reply_tail'})
                     if replyMainDiv is not None:
-                        # replyListDiv = replyMainDiv.find('ul', {'class': 'j_lzl_m_w'})
                         replyDivs = replyMainDiv.findAll('li', {'class': 'lzl_single_post'})
                         for replyDiv in replyDivs:
                             replyItem = {}
@@ -186,7 +181,7 @@ def searchFromTieba(q):
                             for replyImageDiv in replyImageDivs:
                                 replyImages.append(replyImageDiv.attrs['src'])
                             replyItem['content'] = {
-                                'content': repr(replyContentDiv.text.strip(' \n')),
+                                'content': replyContentDiv.text.strip(' \n\t'),
                                 'images': replyImages
                             }
                             if subItem['reply'] is not None:
@@ -197,20 +192,6 @@ def searchFromTieba(q):
             except Exception as e:
                 print(e, f'{base_url}{item['link']}')
         result.append(item)
-
-
-        # if detailsDiv is not None:
-        #     detailsTextDiv = detailsDiv.find('div', {'class': 'threadlist_abs'})
-        #     imgsDiv = detailsDiv.find('ul', {'class': 'threadlist_media'})
-        #     if detailsTextDiv is not None:
-        #         item['content'] = detailsTextDiv.text.strip()
-        #     if imgsDiv is not None:
-        #         images = []
-        #         imgDivList = imgsDiv.findAll('img', {'class': 'threadlist_pic'})
-        #         for imgDiv in imgDivList:
-        #             images.append(imgDiv.attrs['data-original'])
-        #         item['images'] = images
-        # result.append(item)
     print(result)
     os.makedirs(os.path.dirname('./data'), exist_ok=True)
     filePath = os.path.join('./data', '%s.json'%q)
@@ -220,45 +201,10 @@ def searchFromTieba(q):
         json.dump(result, file, ensure_ascii=False, indent=4)
     print(f"JSON 文件创建并写入成功，路径为: {filePath}")
 
-def testProxyAddr(ip, port, useSSL = False):
-    protocol = 'https' if useSSL else 'http'
-    url = f'{protocol}://{ip}:{port}'
-    # print(url)
-    try:
-        res = requests.get(url, timeout=5)
-        # if res.ok:
-        #     return True
-        # else:
-        #     return False
-        return True, {
-            'http': f'http://{ip}:{port}',
-            'https': f'http://{ip}:{port}'
-        }
-        # print(res.status_code)
-        # if res.status_code == 200:
-        #     return True
-        # else:
-        #     return False
-    except requests.RequestException as e:
-        # print(f'Error: {e}')
-        return False, None
-
-def getProxy():
-    global usedProxyIndex
-    global proxyList
-    index = usedProxyIndex % proxyCount
-    proxyItem = proxyList[index]
-    proxyIP = proxyItem[0]
-    proxyPort = proxyItem[1]
-    ok, proxy = testProxyAddr(proxyIP, proxyPort)
-    if not ok:
-        usedProxyIndex += 1
-        getProxy()
-    return proxy
-
 def requestWithProxy(*args, **kwargs):
-    proxy = getProxy()
-    return requests.get(*args, **kwargs, proxies=proxy)
+    _proxy = proxy.use_proxy()
+    print(proxy.used_proxy_index)
+    return requests.get(*args, **kwargs, proxies=_proxy)
 
 if __name__ == "__main__":
     main()
